@@ -1,0 +1,108 @@
+---
+- hosts: all
+  become: yes
+  tasks:
+    - name: Installare i prerequisiti
+      apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - software-properties-common
+        state: present
+        update_cache: yes
+
+    - name: Aggiungere la chiave GPG di Docker
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Aggiungere il repository di Docker
+      apt_repository:
+        repo: deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable
+        state: present
+
+    - name: Installare Docker
+      apt:
+        name: docker-ce
+        state: present
+        update_cache: yes
+
+    - name: Aggiungere l'utente ubuntu al gruppo docker
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    - name: Aggiungere la chiave GPG di Kubernetes
+      apt_key:
+        url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
+        state: present
+
+    - name: Aggiungere il repository di Kubernetes
+      apt_repository:
+        repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
+        state: present
+
+    - name: Installare kubelet, kubeadm e kubectl
+      apt:
+        name:
+          - kubelet
+          - kubeadm
+          - kubectl
+        state: present
+        update_cache: yes
+
+    - name: Disabilitare lo swap
+      command: swapoff -a
+      when: ansible_virtualization_type != "docker"
+
+- hosts: manager
+  become: yes
+  tasks:
+    - name: Inizializzare il cluster Kubernetes
+      shell: kubeadm init --pod-network-cidr=10.244.0.0/16
+      args:
+        creates: /etc/kubernetes/admin.conf
+
+    - name: Configurare kubectl per l'utente root
+      command: >
+        /bin/bash -c 'mkdir -p $HOME/.kube &&
+                      cp -i /etc/kubernetes/admin.conf $HOME/.kube/config &&
+                      chown $(id -u):$(id -g) $HOME/.kube/config'
+
+    - name: Configurare kubectl per l'utente ubuntu
+      command: >
+        /bin/bash -c 'mkdir -p /home/ubuntu/.kube &&
+                      cp -i /etc/kubernetes/admin.conf /home/ubuntu/.kube/config &&
+                      chown ubuntu:ubuntu /home/ubuntu/.kube/config'
+
+    - name: Installare il plugin di rete Flannel
+      command: kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+      environment:
+        KUBECONFIG: /etc/kubernetes/admin.conf
+
+    - name: Ottenere il token di join del cluster
+      shell: kubeadm token create --print-join-command
+      register: join_command
+
+    - name: Salvare il comando di join in un file
+      copy:
+        content: "{{ join_command.stdout }}"
+        dest: /home/ubuntu/join_command.sh
+        owner: ubuntu
+        mode: '0755'
+
+- hosts: workers
+  become: yes
+  tasks:
+    - name: Ottenere il comando di join dal manager
+      fetch:
+        src: /home/ubuntu/join_command.sh
+        dest: ./join_command.sh
+        flat: yes
+
+    - name: Eseguire il comando di join del cluster
+      shell: bash ./join_command.sh
+      args:
+        creates: /etc/kubernetes/kubelet.conf
