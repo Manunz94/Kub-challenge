@@ -1,0 +1,10 @@
+[k8s_manager]
+manager ansible_host=<manager_ip>
+
+[k8s_worker]
+worker1 ansible_host=<worker1_ip>
+worker2 ansible_host=<worker2_ip>
+
+[all:vars]
+ansible_user=ubuntu
+ansible_ssh_private_key_file=~/.ssh/id_rsa
