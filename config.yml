@@ -2,15 +2,15 @@
 - hosts: all
   become: yes
   tasks:
-    - name: Installare i prerequisiti
-      apt:
-        name:
-          - apt-transport-https
-          - ca-certificates
-          - curl
-          - software-properties-common
-        state: present
-        update_cache: yes
+    #- name: Installare i prerequisiti
+      #apt:
+        #name:
+          #- apt-transport-https
+          #- ca-certificates
+          #- curl
+          #- software-properties-common
+        #state: present
+        #update_cache: yes
 
     - name: Aggiungere la chiave GPG di Docker
       apt_key:
@@ -39,7 +39,7 @@
         url: https://packages.cloud.google.com/apt/doc/apt-key.gpg
         state: present
 
-    - name: Aggiungere il repository di Kubernetes
+    - name: Aggiungere il repo di Kubernetes
       apt_repository:
         repo: deb http://apt.kubernetes.io/ kubernetes-xenial main
         state: present
